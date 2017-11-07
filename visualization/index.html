@@ -1,0 +1,221 @@
+
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>image feature space</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<style>
+			html, body {
+				width: 100%;
+				height: 100%;
+			}
+
+			body {
+				background-color: #ffffff;
+				margin: 0;
+				overflow: hidden;
+				font-family: arial;
+			}
+
+			#info {
+				text-align: center;
+				padding: 5px;
+				position: absolute;
+				width: 100%;
+				color: white;
+			}
+			#toggle {
+				cursor: pointer;
+				font-family: verdana;
+				position: absolute;
+				margin-top: 5px;
+				margin-left: 5px;
+				color: white;
+				font-size: 40px;
+				font-weight: bold;
+			}
+			#infopage {
+				color:white;
+				-webkit-transition:all ease 0.3s;
+				background: black;
+				padding: 5px;
+				position: absolute;
+				right: -670px;
+				top: 0;
+				height: 100%;
+				overflow:hidden;
+				width:700px;
+				opacity:0.75;
+			}
+			#infopage.show {
+				right: 0;
+			}
+			.content {
+				margin-left: 30px;
+				width:100%;
+				height:100%;
+				overflow-y: scroll;
+			}
+		</style>
+	</head>
+	<body>
+		<script src="http://code.jquery.com/jquery-2.1.4.min.js"></script>
+		<script src="build/three.js"></script>
+		<script src="examples/js/TypedArrayUtils.js"></script>
+		<script src="examples/js/controls/FlyControls.js"></script>
+		<script src="examples/js/controls/FirstPersonControls.js"></script>
+		<script src="points.js"></script>
+		<script src="words.js"></script>
+		<script>
+			function makeImgSprite( message ) {
+				var imgTexture = loader.load( message )
+
+				var imgMaterial = new THREE.SpriteMaterial( { map: imgTexture } );
+				var sprite = new THREE.Sprite( imgMaterial );
+				sprite.scale.set( 1, 1, 1.0 );
+				return sprite
+			}
+		</script>
+		<script>
+			var loader = new THREE.TextureLoader();
+			var camera, scene, renderer;
+			var geometry, mesh;
+			var controls;
+
+			var objects = [];
+
+			var amountOfParticles = POINTS.length, maxDistance = Math.pow(120, 2);
+			var positions, alphas, particles, _particleGeom;
+
+			var clock = new THREE.Clock();
+			var k = 60
+
+			word2Coords = {}
+			for (var i=0; i<words.length; i++){
+				word2Coords[words[i]] = {
+					x: POINTS[i][0]*k,
+					y: POINTS[i][1]*k,
+					z: POINTS[i][2]*k,
+					draw: false
+				}
+			}
+
+			function init() {
+
+				camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 1000000);
+
+				scene = new THREE.Scene();
+
+				var textureLoader = new THREE.TextureLoader();
+
+
+				var geometry = new THREE.SphereGeometry( 8500, 60, 40 );
+				geometry.scale( - 1, 1, 1 );
+
+				var material = new THREE.MeshBasicMaterial( {
+					map: new THREE.TextureLoader().load( 'starmap_8k.jpg' )
+				} );
+
+				mesh = new THREE.Mesh( geometry, material );
+
+				//scene.add( mesh );
+
+				//
+
+				renderer = new THREE.WebGLRenderer(); // Detector.webgl? new THREE.WebGLRenderer(): new THREE.CanvasRenderer()
+				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				document.body.appendChild( renderer.domElement );
+
+
+				controls = new THREE.FlyControls( camera , renderer.domElement);
+				controls.movementSpeed = 30;
+				controls.lookSpeed = 0.2;
+				controls.dragToLook = true
+
+				sprite = textureLoader.load("examples/textures/lensflare2.jpg" );
+
+				material = new THREE.PointsMaterial( { size: 2, map: sprite, blending: THREE.AdditiveBlending, depthTest: false, transparent : true } );
+				material.color.setHSL( 0.0, 1.,0.9 );
+
+				var radius = 1000;
+
+				geometry = new THREE.BufferGeometry();
+				particles = POINTS.length
+				var positions = new Float32Array( particles * 3 );
+				var colors = new Float32Array( particles * 3 );
+				var sizes = new Float32Array( particles );
+
+				var color = new THREE.Color();
+				for ( var i = 0, i3 = 0; i < particles; i ++, i3 += 3 ) {
+
+					positions[ i3 + 0 ] = POINTS[i][0]*k;
+					positions[ i3 + 1 ] = POINTS[i][1]*k;
+					positions[ i3 + 2 ] = POINTS[i][2]*k;
+
+					color.setHSL( i / particles, 0.0, 0.5 );
+
+					colors[ i3 + 0 ] = color.r;
+					colors[ i3 + 1 ] = color.g;
+					colors[ i3 + 2 ] = color.b;
+
+					sizes[ i ] = Math.min(particles/i, 5) ;
+
+				}
+
+				geometry.addAttribute( 'position', new THREE.BufferAttribute( positions, 3 ) );
+				geometry.addAttribute( 'customColor', new THREE.BufferAttribute( colors, 3 ) );
+				geometry.addAttribute( 'size', new THREE.BufferAttribute( sizes, 1 ) );
+
+
+				//create particles with buffer geometry
+				var distanceFunction = function(a, b){
+					return Math.pow(a[0] - b[0], 2) +  Math.pow(a[1] - b[1], 2) +  Math.pow(a[2] - b[2], 2);
+				};
+
+				particles = new THREE.Points( geometry, material );
+
+				var measureStart = new Date().getTime();
+
+				//scene.add(particles);
+
+				wordSprites = new THREE.Object3D();
+				for (var i =0; i< POINTS.length; i+=2) {
+						var wordsprite = makeImgSprite(words[i]);
+						wordsprite.position.x = POINTS[i][0]*k;
+						wordsprite.position.y = POINTS[i][1]*k;
+						wordsprite.position.z = POINTS[i][2]*k;
+						wordsprite.concept = words[i];
+						word2Coords[wordsprite.concept].draw = true
+						wordSprites.add(wordsprite)
+				}
+				scene.add(wordSprites);
+				window.addEventListener( 'resize', onWindowResize, false );
+			}
+
+
+			function onWindowResize() {
+
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+				//controls.handleResize();
+			}
+
+			function animate() {
+
+				requestAnimationFrame( animate );
+
+				controls.update( clock.getDelta() );
+				renderer.render( scene, camera );
+			}
+
+			init();
+			animate();
+
+		</script>
+	</body>
+</html>
